@@ -1,0 +1,79 @@
+from PIL import Image
+import pytesseract as py
+from pytesseract import image_to_string
+import numpy as np
+import neurolab as nl
+from sklearn import preprocessing
+import PIL
+import cv2
+from matplotlib import pyplot as plt
+#Define the input file
+input_file = 'C:/Users/Sony/Downloads/letter.data'
+#Define the number of datapoints
+num_datapoints = 50
+#Reading the input image file
+img = cv2.imread("C:/Users/Sony/Desktop/s3.jpg", 0)
+#Finding the optimized threshold
+ret, thresh = cv2.threshold(img, 10, 255, cv2.THRESH_OTSU)
+print ("Threshold selected : ", ret)
+#Preprocessing and plotting graph for Binary threshold
+img = cv2.imread("C:/Users/Sony/Desktop/s3.jpg",0)
+ret,thresh1 = cv2.threshold(img,129.0,255,cv2.THRESH_BINARY)
+ret,thresh2 = cv2.threshold(img,129.0,255,cv2.THRESH_BINARY_INV)
+titles = ['Original Image','BINARY','BINARY_INV']
+images = [img, thresh1, thresh2]
+for i in range(3):
+    plt.subplot(2,3,i+1),plt.imshow(images[i],'gray')
+    plt.title(titles[i])
+    plt.xticks([]),plt.yticks([])
+plt.show()
+#Extracting text from input image file
+img=py.image_to_string(Image.open('C:/Users/Sony/Desktop/s3.jpg'))
+#Printing the extracted text from input image file
+print(img)
+#Finding the length of the text extracted from input image file
+num_orig_labels = len(img)
+print(num_orig_labels)
+#Splitting the data into training(70) and test(30) samples
+num_train = int(0.7 * num_datapoints)
+num_test = num_datapoints - num_train
+#Dataset extraction parameters
+start = 4
+end = -1
+#Creating the dataset
+data = []
+labels = []
+with open(input_file, 'r') as f:
+    for line in f.readlines():
+        list_vals = line.split('\t')
+        #Skip the labels which is not in our list of labels
+        if list_vals[1] not in img:
+            continue
+        #Extract the current label and append it to the main list
+        label = np.zeros((num_orig_labels, 1))
+        label[img.index(list_vals[1])] = 1
+        labels.append(label)
+        #Extract the character vector and append it to the main list
+        cur_char = np.array([float(x) for x in list_vals[start:end]])
+        data.append(cur_char)
+        #Exit the loop once we have created the dataset
+        if len(data) >= num_datapoints:
+            break
+#Convert the list into numpy arrays        
+data = np.asfarray(data)
+labels = np.array(labels).reshape(num_datapoints, num_orig_labels)
+print(labels)
+#Extract number of dimensions
+num_dims = len(data[0])
+print(num_dims)
+##Create a feedforward neural network and set the training algorithm to gradient descent
+nn = nl.net.newff([[0, 1] for _ in range(len(data[0]))],[128,16, num_orig_labels])
+nn.trainf = nl.train.train_gd
+#Train the neural neural network
+error_progress = nn.train(data[:num_train,:], labels[:num_train,:],epochs=20000, show=100, goal=0.01)
+#Predict the output for test data
+print('\nTesting on unknown data:')
+predicted_test = nn.sim(data[num_train:, :])
+for i in range(num_test):
+    print('\nOriginal:',img[np.argmax(labels[i])])
+    print('Predicted:', img[np.argmax(predicted_test[i])])
